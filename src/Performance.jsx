@@ -15,6 +15,7 @@ import {
   valuePortfolio,
   portfolioSeries,
   draftSeries,
+  sinceAdded,
 } from "../shared/finance.mjs";
 
 // Value line with the €100,000 baseline; complete points are solid, estimates hollow.
@@ -114,7 +115,7 @@ export default function Performance({
         ? []
         : live
           ? portfolioSeries(trades, stocks, histories, market.fx, today)
-          : draftSeries(draft, stocks, histories, market.fx),
+          : draftSeries(draft, stocks, histories, market.fx, today),
     [loaded, live, trades, draft, stocks, histories, market.fx, today],
   );
   const byId = Object.fromEntries(stocks.map((s) => [s.id, s]));
@@ -141,6 +142,8 @@ export default function Performance({
           s,
           q,
           weight: p.weight,
+          added: p.added,
+          since: sinceAdded(p, s, histories[p.id], market.fx),
           budget: (CAPITAL * p.weight) / 100,
           shares: price ? Math.floor((CAPITAL * p.weight) / 100 / price) : null,
         };
@@ -156,12 +159,15 @@ export default function Performance({
   const over = rows.filter((r) => isNum(r.weight) && r.weight > MAX_WEIGHT + 1e-9);
   const first = series.find((p) => p.complete) || series[0],
     last = series.at(-1);
-  const planReturn21 = draft.length
-    ? draft.reduce((sum, p) => {
-        const r = market.quotes?.[p.id]?.return21;
-        return isNum(r) ? sum + (r * p.weight) / 100 : sum;
-      }, 0)
-    : null;
+  // Weighted return since each stock's add date, on the whole €100,000.
+  const planSince =
+    !live && rows.some((r) => isNum(r.since))
+      ? rows.reduce(
+          (sum, r) => sum + (isNum(r.since) ? (r.since * r.weight) / 100 : 0),
+          0,
+        )
+      : null;
+  const firstAdded = draft.map((p) => p.added).filter(Boolean).sort()[0];
   return (
     <>
       <section className="page-intro">
@@ -178,7 +184,7 @@ export default function Performance({
             {live
               ? "Journal positions marked at the latest close and ECB reference rates, in EUR."
               : draft.length
-                ? "The allocation plan priced at the latest close. Performance tracking starts with the first journal entry."
+                ? "The plan measured from the day each stock was added, at daily closes and ECB rates. From 5 October the journal takes over."
                 : "No plan yet. Add 5–20 stocks from the screener."}
           </p>
         </div>
@@ -262,11 +268,13 @@ export default function Performance({
                   </span>
                 </div>
                 <div>
-                  <span className="eyebrow">LAST 21 SESSIONS</span>
-                  <strong className={isNum(planReturn21) && planReturn21 < 0 ? "negative" : "positive"}>
-                    {pct(planReturn21)}
+                  <span className="eyebrow">SINCE ADDED</span>
+                  <strong className={isNum(planSince) && planSince < 0 ? "negative" : "positive"}>
+                    {pct(planSince)}
                   </strong>
-                  <span>Weighted, local currency</span>
+                  <span>
+                    {firstAdded ? `On €100,000 · first pick ${dateLabel(firstAdded)}` : "—"}
+                  </span>
                 </div>
               </>
             )}
@@ -298,7 +306,7 @@ export default function Performance({
           )}
           <div className="journal-chart">
             <SectionHead
-              title={live ? "Daily value since the first trade" : "What the plan would have returned"}
+              title={live ? "Daily value since the first trade" : "Plan value since the first pick"}
             >
               {first && last && (
                 <span className="chart-summary">
@@ -318,7 +326,7 @@ export default function Performance({
             <p className="chart-footnote">
               {live
                 ? "Cash plus holdings at each session's close and the ECB rate of that day. Hollow points mark sessions where a close or FX rate was missing."
-                : "Last 63 sessions, weights held constant, unallocated capital in cash, ECB daily rates. Not a forecast."}
+                : "Each stock enters at the close of the day it was added, at its current weight; the rest stays in cash. Changing a weight re-prices the whole curve. Hollow points mark sessions with a missing close or FX rate."}
             </p>
           </div>
           <SectionHead title={live ? "Holdings" : "Planned positions"} />
@@ -333,7 +341,7 @@ export default function Performance({
                   <th className="numeric">{live ? "Value · EUR" : "Price"}</th>
                   <th className="numeric">Day</th>
                   <th className="numeric">21 sessions</th>
-                  <th className="numeric">{live ? "P&L · EUR" : "63 sessions"}</th>
+                  <th className="numeric">{live ? "P&L · EUR" : "Since added"}</th>
                   <th>Next earnings</th>
                 </tr>
               </thead>
@@ -364,7 +372,14 @@ export default function Performance({
                       <Change value={r.q?.return21} />
                     </td>
                     <td className={`numeric ${live ? (r.pnl >= 0 ? "positive" : "negative") : ""}`}>
-                      {live ? eur(r.pnl) : <Change value={r.q?.return63} />}
+                      {live ? (
+                        eur(r.pnl)
+                      ) : (
+                        <>
+                          <Change value={r.since} />
+                          <small className="muted"> {dateLabel(r.added)}</small>
+                        </>
+                      )}
                     </td>
                     <td className="small">
                       {r.q?.earningsDate

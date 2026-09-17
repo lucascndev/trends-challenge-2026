@@ -361,39 +361,60 @@ export function portfolioSeries(trades, stocks, histories, fx, today = day()) {
   );
   return points.filter((p) => Date.parse(p.date) <= lastPriced || p.date === sorted[0].date);
 }
-// What the planned allocation would have been worth, in EUR, over the last sessions.
-// Weights are held constant from the first date; unallocated capital stays in cash.
-export function draftSeries(draft, stocks, histories, fx, sessions = 63) {
+// EUR value of a stock on a date: the last close on or before it times that day's ECB rate.
+const eurOn = (history, stock, date, fx) => {
+  const close = closeOn(history, date),
+    rate = fxOn(stock.currency, date, fx);
+  return positive(close) && positive(rate) ? close * stock.quoteScale * rate : null;
+};
+// Return of a plan entry since the day it was added, using the latest close.
+export function sinceAdded(entry, stock, history, fx) {
+  if (!entry.added || !history?.length) return null;
+  const base = eurOn(history, stock, entry.added, fx),
+    now = eurOn(history, stock, history.at(-1).date, fx);
+  return base && now ? (now / base - 1) * 100 : null;
+}
+// Value of the plan, in EUR, from the day the first stock was added: each entry is
+// a virtual buy of its weight at the close of its add date; before that its weight
+// sits in cash. Weights apply retroactively, so changing one re-prices the past.
+export function draftSeries(draft, stocks, histories, fx, today = day()) {
   const rows = draft
     .map((p) => ({
       stock: stocks.find((s) => s.id === p.id),
       weight: p.weight,
-      history: (histories[p.id] || []).slice(-sessions),
+      added: p.added,
+      history: histories[p.id] || [],
     }))
-    .filter((r) => r.stock && positive(r.weight) && r.history.length > 1);
+    .filter((r) => r.stock && positive(r.weight) && r.added && r.history.length);
   if (!rows.length) return [];
-  const dates = [...new Set(rows.flatMap((r) => r.history.map((p) => p.date)))].sort();
-  const start = dates[0];
+  const start = rows.map((r) => r.added).sort()[0];
+  const lastPriced = rows
+    .map((r) => r.history.at(-1).date)
+    .sort()
+    .at(-1);
+  const end = [today, lastPriced, END].sort()[0];
+  const base = rows.map((r) => eurOn(r.history, r.stock, r.added, fx));
   const cash = 1 - rows.reduce((sum, r) => sum + r.weight, 0) / 100;
-  const base = rows.map((r) => {
-    const close = r.history[0].close,
-      rate = fxOn(r.stock.currency, start, fx);
-    return positive(close) && positive(rate) ? close * rate : null;
-  });
-  if (base.some((b) => b === null)) return [];
-  return dates.map((d) => {
+  const points = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) {
+    if (isWeekend(d)) continue;
     let value = cash,
       complete = true;
     rows.forEach((r, i) => {
-      const close = closeOn(r.history, d),
-        rate = fxOn(r.stock.currency, d, fx);
-      if (!positive(close) || !positive(rate)) {
+      if (r.added > d || base[i] === null) {
+        value += r.weight / 100;
+        if (r.added <= d) complete = false;
+        return;
+      }
+      const now = eurOn(r.history, r.stock, d, fx);
+      if (now === null) {
         complete = false;
         value += r.weight / 100;
         return;
       }
-      value += ((r.weight / 100) * close * rate) / base[i];
+      value += ((r.weight / 100) * now) / base[i];
     });
-    return { date: d, value: value * CAPITAL, complete };
-  });
+    points.push({ date: d, value: value * CAPITAL, complete });
+  }
+  return points;
 }

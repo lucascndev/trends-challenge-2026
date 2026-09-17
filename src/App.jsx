@@ -55,9 +55,16 @@ function validateWorkspace(data, stocks) {
   if (
     data.draft.length > MAX_POSITIONS ||
     new Set(data.draft.map((p) => p.id)).size !== data.draft.length ||
-    data.draft.some((p) => !eligible.has(p.id) || !isNum(p.weight))
+    data.draft.some(
+      (p) =>
+        !eligible.has(p.id) ||
+        !isNum(p.weight) ||
+        (p.added !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(p.added)),
+    )
   )
     throw new Error("The plan contains invalid allocations or ineligible stocks.");
+  // Plans saved before add dates existed count as added today.
+  const draft = data.draft.map((p) => ({ ...p, added: p.added || day() }));
   if (data.watchlist.some((id) => !eligible.has(id)))
     throw new Error("The watchlist contains a listing outside this universe.");
   const checked = [];
@@ -82,7 +89,7 @@ function validateWorkspace(data, stocks) {
       throw new Error("Invalid research notes.");
   }
   const { snapshots, ...rest } = data;
-  return rest;
+  return { ...rest, draft };
 }
 const readGithub = () => {
   try {
@@ -333,7 +340,10 @@ export default function App() {
       notify(`The plan already holds ${MAX_POSITIONS} stocks.`);
       return;
     }
-    setWorkspace((w) => ({ ...w, draft: [...w.draft, { id, weight: 0 }] }));
+    setWorkspace((w) => ({
+      ...w,
+      draft: [...w.draft, { id, weight: 0, added: day() }],
+    }));
     notify(`${id} added to the plan at 0%.`);
   }
   function toggleWatch(id) {

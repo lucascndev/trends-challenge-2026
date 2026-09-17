@@ -3060,3 +3060,12 @@ footer {
 .allocation-check + .allocation-check {
   margin-top: 16px;
 }
+
+.date-input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  background: var(--paper-light);
+  color: var(--ink);
+}

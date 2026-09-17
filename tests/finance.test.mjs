@@ -14,6 +14,7 @@ import {
   phase,
   portfolioSeries,
   draftSeries,
+  sinceAdded,
   fxOn,
   CAPITAL,
 } from "../shared/finance.mjs";
@@ -493,24 +494,42 @@ test("Daily portfolio series marks sessions to close and flags missing inputs", 
   );
   assert.equal(gap[2].complete, false);
 });
-test("Plan series holds weights constant and keeps unallocated capital in cash", () => {
+test("Plan series starts at the first pick; later picks enter on their add date", () => {
   const draft = [
-    { id: euro.id, weight: 25 },
-    { id: us.id, weight: 25 },
+    { id: euro.id, weight: 25, added: "2026-09-01" },
+    { id: us.id, weight: 25, added: "2026-09-02" },
   ];
   const histories = {
     [euro.id]: [
       { date: "2026-09-01", close: 100 },
       { date: "2026-09-02", close: 110 },
+      { date: "2026-09-03", close: 120 },
     ],
     [us.id]: [
-      { date: "2026-09-01", close: 50 },
+      { date: "2026-09-01", close: 40 },
       { date: "2026-09-02", close: 50 },
+      { date: "2026-09-03", close: 55 },
     ],
   };
   const fx = { rates: { EUR: 1, USD: 0.9 }, history: {} };
-  const series = draftSeries(draft, stocks, histories, fx);
+  const series = draftSeries(draft, stocks, histories, fx, "2026-09-03");
+  assert.deepEqual(
+    series.map((p) => p.date),
+    ["2026-09-01", "2026-09-02", "2026-09-03"],
+  );
   approx(series[0].value, CAPITAL);
+  // Day 2: euro +10%; the US pick enters today at 50, so it is still flat.
   approx(series[1].value, CAPITAL * (0.5 + 0.25 * 1.1 + 0.25));
+  // Day 3: euro +20% from 100, US +10% from 50.
+  approx(series[2].value, CAPITAL * (0.5 + 0.25 * 1.2 + 0.25 * 1.1));
+  assert.ok(series.every((p) => p.complete));
+  approx(sinceAdded(draft[0], euro, histories[euro.id], fx), 20);
+  approx(sinceAdded(draft[1], us, histories[us.id], fx), 10);
+  assert.equal(sinceAdded({ id: us.id, weight: 1 }, us, histories[us.id], fx), null);
   assert.deepEqual(draftSeries([], stocks, histories, fx), []);
+  // Entries without an add date are ignored rather than guessed.
+  assert.deepEqual(
+    draftSeries([{ id: euro.id, weight: 25 }], stocks, histories, fx),
+    [],
+  );
 });

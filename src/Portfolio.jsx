@@ -86,6 +86,10 @@ export default function Portfolio({
     setDraft(
       draft.map((p) => (p.id === id ? { ...p, weight: Number(value) } : p)),
     );
+  const updateAdded = (id, value) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    value <= day() &&
+    setDraft(draft.map((p) => (p.id === id ? { ...p, added: value } : p)));
   function openTrade(id) {
     const selected =
       stocks.find((s) => s.id === (id || draft[0]?.id)) || stocks[0];
@@ -249,6 +253,7 @@ export default function Portfolio({
                           <th className="numeric">Target %</th>
                           <th className="numeric">Budget · EUR</th>
                           <th className="numeric">Est. shares</th>
+                          <th>Added</th>
                           <th>
                             <span className="sr-only">Remove</span>
                           </th>
@@ -327,6 +332,18 @@ export default function Portfolio({
                                   )}
                               </td>
                               <td>
+                                <input
+                                  className="date-input"
+                                  type="date"
+                                  aria-label={`${s.name} added on`}
+                                  max={day()}
+                                  value={p.added || ""}
+                                  onChange={(e) =>
+                                    updateAdded(p.id, e.target.value)
+                                  }
+                                />
+                              </td>
+                              <td>
                                 <button
                                   className="icon-button"
                                   aria-label={`Remove ${s.name} from draft`}
@@ -345,7 +362,9 @@ export default function Portfolio({
                   </div>
                   <div className="inline-note">
                     <Icon name="info" size={15} /> Estimated shares use the
-                    latest close and ECB rate, whole shares, no fees.
+                    latest close and ECB rate, whole shares, no fees. The
+                    Performance page measures each stock from the close of the
+                    day it was added; edit the date to backdate a pick.
                   </div>
                 </>
               ) : (
