@@ -1,0 +1,32 @@
+{
+  "name": "trends-challenge-desk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node server/index.mjs",
+    "start": "node server/index.mjs --production",
+    "build": "node scripts/clean-data.mjs && vite build --configLoader native",
+    "data:clean": "node scripts/clean-data.mjs",
+    "data:refresh": "node scripts/refresh-data.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.mjs && node tests/trading-browser.mjs",
+    "preview": "vite preview --configLoader native"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.7.0",
+    "clsx": "2.1.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "tailwindcss": "4.3.3",
+    "vite": "6.4.3",
+    "playwright": "1.62.1"
+  }
+}

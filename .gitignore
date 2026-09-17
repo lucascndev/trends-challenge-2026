@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.cache/
+test-results/
+*.log
+.env
+public/data/market/*.tmp
+public/data/market/history/*.tmp
+data/market-cache.json
+data/market-cache.json.tmp

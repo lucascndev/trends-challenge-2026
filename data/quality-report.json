@@ -1,0 +1,25 @@
+{
+  "sourceFile": "trends-invest-challenge-stock-lookup.csv",
+  "sourceSha256": "430755a265a2db93cdb831dc219bef6201eac40eefd5ed3fc83cb4a822219a97",
+  "rowsRead": 566,
+  "rowsOutput": 566,
+  "duplicates": [],
+  "exchanges": 19,
+  "sectors": 11,
+  "currencies": 9,
+  "shareClassReview": 11,
+  "missingMarketCaps": 2,
+  "penceQuotes": 17,
+  "olderMarketCaps": 6,
+  "roundedMarketCaps": 147,
+  "snapshotDate": "2026-09-16",
+  "transformations": [
+    "Trimmed whitespace and normalized Unicode (NFC).",
+    "Preserved challenge names, symbols, listing caveats, source dates and URLs.",
+    "Converted market caps to numbers; missing values remain null.",
+    "Separated quote units from currency: GBp/GBX → GBP with 0.01 quote scale. Market caps retain GBP units.",
+    "Kept source sector and challenge sector separately.",
+    "Flagged unconfirmed share classes, caps older than five days at retrieval, rounded caps and missing caps.",
+    "No invented prices, FX rates, earnings dates, or historical returns."
+  ]
+}

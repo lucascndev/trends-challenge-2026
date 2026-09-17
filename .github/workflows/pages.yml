@@ -1,0 +1,82 @@
+name: Refresh prices and deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 22:30 UTC on weekdays: after the NYSE close, before the Brussels morning.
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Comma-separated listing symbols to refresh (empty = all)"
+        required: false
+        default: ""
+
+# One run at a time so two refreshes never commit over each other.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Refresh market data
+        if: github.event_name != 'push'
+        run: |
+          if [ -n "${{ github.event.inputs.symbols }}" ]; then
+            npm run data:refresh -- --symbols="${{ github.event.inputs.symbols }}"
+          else
+            npm run data:refresh
+          fi
+      - name: Commit refreshed data
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/market
+          if git diff --cached --quiet; then
+            echo "No data changes."
+          else
+            git commit -m "Refresh market data ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Build
+        env:
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          if [[ "$REPO_NAME" == *.github.io ]]; then
+            export BASE_PATH="/"
+          else
+            export BASE_PATH="/${REPO_NAME}/"
+          fi
+          npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
